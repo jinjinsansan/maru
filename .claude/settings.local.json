@@ -4,7 +4,10 @@
       "Bash(mkdir -p _docs)",
       "Bash(mv \"github supabase.txt\" spec_md.txt _docs/)",
       "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir=false --import-alias=\"@/*\" --use-npm --no-turbopack)",
-      "Bash(mv _docs:*)"
+      "Bash(mv _docs:*)",
+      "Bash(mv /tmp/_maru_docs _docs)",
+      "Bash(npm install:*)",
+      "Bash(npx next:*)"
     ]
   }
 }
