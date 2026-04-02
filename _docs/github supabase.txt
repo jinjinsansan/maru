@@ -1,0 +1,30 @@
+https://github.com/jinjinsansan/maru
+
+Quick setup — if you’ve done this kind of thing before
+or	
+https://github.com/jinjinsansan/maru.git
+Get started by creating a new file or uploading an existing file. We recommend every repository include a README, LICENSE, and .gitignore.
+
+…or create a new repository on the command line
+echo "# maru" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/jinjinsansan/maru.git
+git push -u origin main
+…or push an existing repository from the command line
+git remote add origin https://github.com/jinjinsansan/maru.git
+git branch -M main
+
+
+supabase
+
+https://etzkxaqokyhknfgrnljd.supabase.co
+
+
+anon
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0emt4YXFva3loa25mZ3JubGpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNDg2MTMsImV4cCI6MjA5MDcyNDYxM30.deMVgEU80W9qaDLNTClYl3vbK_eRpwp6WQPlMJeZPKg
+
+サービスロールキー
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0emt4YXFva3loa25mZ3JubGpkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTE0ODYxMywiZXhwIjoyMDkwNzI0NjEzfQ.S9YeL2YsFh8z61BjFucoUfcy2nBqQqqYz36doBnQN7k

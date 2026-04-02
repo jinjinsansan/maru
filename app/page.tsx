@@ -1,65 +1,136 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useState } from 'react'
+import { validateInviteCode, loginWithCode, registerWithCode } from './actions/invite'
+import { useRouter } from 'next/navigation'
+
+export default function InvitePage() {
+  const [code, setCode] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [needsName, setNeedsName] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      // ニックネーム入力ステップ
+      if (needsName) {
+        if (!displayName.trim()) {
+          setError('ニックネームを入力してください')
+          setLoading(false)
+          return
+        }
+        const result = await registerWithCode(code, displayName.trim())
+        if (!result.success) {
+          setError(result.error || '登録に失敗しました')
+          setLoading(false)
+          return
+        }
+        router.push('/mypage')
+        return
+      }
+
+      // 招待コード検証ステップ
+      const result = await validateInviteCode(code)
+      if (!result.valid) {
+        setError(result.error || '無効な招待コードです')
+        setLoading(false)
+        return
+      }
+
+      if (result.needsName) {
+        // 新規 → ニックネーム入力へ
+        setNeedsName(true)
+        setLoading(false)
+        return
+      }
+
+      // 既存ユーザー → ログイン
+      const loginResult = await loginWithCode(code)
+      if (!loginResult.success) {
+        setError(loginResult.error || 'ログインに失敗しました')
+        setLoading(false)
+        return
+      }
+      router.push('/mypage')
+    } catch {
+      setError('エラーが発生しました')
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold" style={{ color: 'var(--accent-gold)' }}>
+            〇❌パーティゲーム
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-2 text-sm text-gray-400">
+            {needsName ? 'ニックネームを設定してください' : '招待コードを入力してログイン'}
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {!needsName ? (
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="招待コード（8文字）"
+              maxLength={8}
+              className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/20 text-white text-center text-lg tracking-widest placeholder:text-gray-500 focus:outline-none focus:border-[var(--accent-gold)] transition-colors"
+              autoFocus
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          ) : (
+            <>
+              <div className="text-center text-sm text-gray-400 mb-2">
+                コード: <span style={{ color: 'var(--accent-gold)' }}>{code}</span>
+              </div>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="ニックネーム"
+                maxLength={20}
+                className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/20 text-white text-center text-lg placeholder:text-gray-500 focus:outline-none focus:border-[var(--accent-gold)] transition-colors"
+                autoFocus
+              />
+            </>
+          )}
+
+          {error && (
+            <p className="text-red-400 text-sm text-center">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || (!needsName && code.length < 8)}
+            className="w-full py-3 rounded-lg font-medium text-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: 'linear-gradient(135deg, var(--accent-gold), #c9a84c)',
+              color: '#1a1a2e',
+            }}
           >
-            Documentation
-          </a>
-        </div>
-      </main>
+            {loading ? '処理中...' : needsName ? '登録してはじめる' : 'ログイン'}
+          </button>
+
+          {needsName && (
+            <button
+              type="button"
+              onClick={() => { setNeedsName(false); setError('') }}
+              className="w-full py-2 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              戻る
+            </button>
+          )}
+        </form>
+      </div>
     </div>
-  );
+  )
 }

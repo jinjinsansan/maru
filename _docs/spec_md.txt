@@ -1,0 +1,555 @@
+# 〇❌パーティゲーム Webアプリ 詳細仕様書
+
+---
+
+## 1. プロジェクト概要
+
+- **アプリ名**: 〇❌パーティゲーム
+- **目的**: 大学パーティ用の〇❌ベットゲームを招待制・認証付きWebアプリとして提供
+- **対象ユーザー**: 招待コードを持つ生徒チームメンバー + 管理者
+
+---
+
+## 2. 技術スタック
+
+| レイヤー | 技術 |
+|----------|------|
+| フロントエンド | Next.js 14 (App Router) |
+| スタイル | Tailwind CSS + カスタムCSS |
+| 認証 | Supabase Auth（Google OAuth） |
+| DB | Supabase（PostgreSQL） |
+| ホスティング | Vercel |
+| 追加ライブラリ | なし（Supabase SDK のみ） |
+
+**Supabase Auth を使うことで NextAuth は不要。**  
+Supabase の Google OAuth + Row Level Security (RLS) で認証・認可を完結させる。
+
+---
+
+## 3. 認証・招待コードシステム
+
+### 3-1. 招待コードの仕様
+
+- 管理者のみが招待コードを生成・一覧表示できる
+- コードはランダム英数字8文字（例: `X7K2PQ9R`）、ハイフンなし
+- 有効期限: 生成から7日間（管理者が任意変更可能）
+- 使い捨て: 1コード1アカウントのみ有効
+- 使用済みコードは `used_by` に user_id が入り無効化される
+
+### 3-2. ログインフロー
+
+```
+① ユーザーがアプリにアクセス
+   → 未ログインなら「招待コード入力画面」を表示
+
+② 招待コードを入力して「確認」ボタン
+   → Supabase DB の invite_codes テーブルを検索
+   → 無効 or 使用済み or 期限切れ → エラーメッセージ表示・弾く
+   → 有効 → コードをセッションストレージに一時保存し Google ログインへ進む
+
+③ Google OAuth（Supabase Auth）でログイン
+   → コールバック時にセッションストレージのコードを再検証
+   → 有効なら invite_codes.used_by に user_id をセット・used_at を記録
+   → users テーブルにユーザー情報を Upsert
+   → マイページへリダイレクト
+
+④ 2回目以降のログイン
+   → Supabase セッションが有効なら招待コード入力をスキップ
+   → 直接マイページへ
+```
+
+### 3-3. 管理者設定
+
+- `users.is_admin = true` のユーザーのみ管理者パネルにアクセス可能
+- 初期管理者は Supabase ダッシュボードまたはシードSQLで手動設定
+
+---
+
+## 4. DBスキーマ（Supabase PostgreSQL）
+
+### `users` テーブル
+
+```sql
+CREATE TABLE users (
+  id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email         TEXT UNIQUE NOT NULL,
+  display_name  TEXT,
+  avatar_url    TEXT,
+  is_admin      BOOLEAN DEFAULT FALSE,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### `invite_codes` テーブル
+
+```sql
+CREATE TABLE invite_codes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code        TEXT UNIQUE NOT NULL,
+  created_by  UUID REFERENCES users(id),
+  used_by     UUID REFERENCES users(id) DEFAULT NULL,
+  used_at     TIMESTAMPTZ DEFAULT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### `game_sessions` テーブル
+
+```sql
+CREATE TABLE game_sessions (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
+  chip_base       NUMERIC NOT NULL DEFAULT 1,  -- ユーザー設定の基準値（1チップ＝何円/ドル）
+  started_at      TIMESTAMPTZ DEFAULT NOW(),
+  ended_at        TIMESTAMPTZ DEFAULT NULL,
+  total_profit    NUMERIC DEFAULT 0,           -- セッション終了時の累計損益（chip単位）
+  o_count         INTEGER DEFAULT 0,           -- セッション内の〇総数
+  x_count         INTEGER DEFAULT 0            -- セッション内の❌総数
+);
+```
+
+### `sets` テーブル
+
+```sql
+CREATE TABLE sets (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id          UUID REFERENCES game_sessions(id) ON DELETE CASCADE,
+  set_index           INTEGER NOT NULL,         -- セッション内の連番（1始まり）
+  results             TEXT NOT NULL,            -- 例: "OOXOXXO"（7文字固定、O=〇 X=❌）
+  wins                INTEGER NOT NULL,         -- 〇の数
+  losses              INTEGER NOT NULL,         -- ❌の数
+  overshoot           INTEGER NOT NULL,         -- 負け越しマスの値（0以上）
+  slashed             BOOLEAN DEFAULT FALSE,    -- 斜線フラグ
+  used_unit_idx       INTEGER NOT NULL,         -- このセットで実際に使ったSEQインデックス
+  next_unit_idx       INTEGER NOT NULL,         -- 次セット用SEQインデックス（チップ単位行の表示値）
+  set_profit          NUMERIC NOT NULL,         -- このセットの損益（chip単位）
+  cumulative_profit   NUMERIC NOT NULL,         -- このセットまでの累計損益（chip単位）
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### RLS ポリシー
+
+```sql
+-- users: 本人のみ読み書き / 管理者は全件読み取り可
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "self_read" ON users FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "admin_read" ON users FOR SELECT USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND is_admin = TRUE)
+);
+
+-- game_sessions: 本人のみ / 管理者は全件読み取り可
+ALTER TABLE game_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "self_session" ON game_sessions FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "admin_session" ON game_sessions FOR SELECT USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND is_admin = TRUE)
+);
+
+-- sets: 本人のみ / 管理者は全件読み取り可
+ALTER TABLE sets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "self_sets" ON sets FOR ALL USING (
+  EXISTS (SELECT 1 FROM game_sessions WHERE id = session_id AND user_id = auth.uid())
+);
+CREATE POLICY "admin_sets" ON sets FOR SELECT USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND is_admin = TRUE)
+);
+
+-- invite_codes: 管理者のみ生成・閲覧
+ALTER TABLE invite_codes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "admin_invite" ON invite_codes FOR ALL USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND is_admin = TRUE)
+);
+```
+
+---
+
+## 5. コアゲームロジック（正確に実装すること）
+
+### 5-1. チップ単位数列（SEQ）
+
+インデックス0から順に以下を使用（変更不可）:
+
+```javascript
+const SEQ = [
+  1, 2, 3, 5, 7, 9, 11, 13,
+  16, 19, 22, 25, 28, 31,
+  35, 39, 43, 47, 51, 55,
+  60, 65, 70, 75, 80, 85, 90, 95, 100,
+  106, 112, 118, 124, 130, 136, 142, 148, 154, 160,
+  170, 180, 190, 200, 210, 220, 230, 240, 250
+];
+```
+
+### 5-2. 1セットの定義
+
+- 7ターン連続の〇❌結果を1セットとする
+- 常に〇にbetする（❌にはbetしない）
+- 7回すべて入力完了した時点でセット確定・DB保存
+
+### 5-3. 勝敗判定
+
+```javascript
+wins   = results.filter(r => r === 'O').length  // 0〜7
+losses = 7 - wins
+diff   = wins - losses  // 必ず奇数になる（7回なので引き分けなし）
+
+// diff > 0 → 勝ち（4勝3負以上）
+// diff < 0 → 負け（3勝4負以下）
+```
+
+### 5-4. 負け越しマス（overshoot）計算
+
+```javascript
+// 前セットの overshoot を prevOvershoot とする（初回は 0）
+newOvershoot = prevOvershoot - diff
+if (newOvershoot < 0) newOvershoot = 0
+// ※ overshoot は 0 以下にはならない
+```
+
+### 5-5. 斜線（slashed）処理
+
+勝ち（diff > 0）が確定した直後に実行:
+
+```javascript
+for (let i = 0; i < sets.length; i++) {
+  if (!sets[i].slashed && sets[i].overshoot > newOvershoot) {
+    sets[i].slashed = true  // DB も UPDATE する
+  }
+}
+```
+
+- 斜線が引かれたセルは UI 上でピンクの横線を表示する
+- 斜線セルの「負け越し」と「チップ単位」の数字はグレーアウトし横線を引く
+
+### 5-6. 次セットのbet単位（next_unit_idx）決定
+
+```javascript
+if (diff < 0) {
+  // 負け → 1段階UP
+  nextUnitIdx = Math.min(usedUnitIdx + 1, SEQ.length - 1)
+
+} else if (diff > 0) {
+  // 勝ち → 現セッション内の非斜線セットから overshoot が一致するものを後ろから検索
+  let found = -1
+  for (let i = sets.length - 1; i >= 0; i--) {
+    if (!sets[i].slashed && sets[i].overshoot === newOvershoot) {
+      found = sets[i].next_unit_idx
+      break
+    }
+  }
+  if (found >= 0) {
+    nextUnitIdx = found
+  } else {
+    // 一致なし → 非斜線セットの中で overshoot が newOvershoot より大きく最も近いものを使用
+    let best = -1, bestDiff = Infinity
+    for (let i = 0; i < sets.length; i++) {
+      if (!sets[i].slashed && sets[i].overshoot > newOvershoot) {
+        const d = sets[i].overshoot - newOvershoot
+        if (d < bestDiff) { bestDiff = d; best = sets[i].next_unit_idx }
+      }
+    }
+    nextUnitIdx = best >= 0 ? best : 0
+  }
+}
+```
+
+### 5-7. 損益計算
+
+```javascript
+// used_unit_idx = このセットが始まる前の currentUnitIdx（前セットの next_unit_idx）
+// 初回セットの used_unit_idx = 0（SEQ[0] = 1チップ）
+
+setProfit        = diff * SEQ[usedUnitIdx]           // このセット単体の損益（chip単位）
+cumulativeProfit = prevCumulativeProfit + setProfit   // 累計損益（chip単位）
+
+// 実際の金額表示 = chip単位の値 × chip_base（ユーザー設定の基準値）
+```
+
+### 5-8. チップ単位行の意味（重要）
+
+- チップ単位行に表示する値 = **次のセットで使うbet単位** = `SEQ[next_unit_idx]`
+- 損益計算に使う単位 = **このセットで実際に使った単位** = `SEQ[used_unit_idx]`
+- `used_unit_idx` = 前セットの `next_unit_idx`（初回は 0）
+
+---
+
+## 6. 画面構成・ページ一覧
+
+### 6-1. 招待コード入力画面（`/`）
+
+- 未ログイン時のランディングページ
+- UI: アプリ名「〇❌パーティゲーム」+ 招待コード入力フォーム
+- 「ログインする」ボタン → コード検証 → Google OAuth へ
+
+### 6-2. マイページ（`/mypage`）
+
+- ログイン必須
+- **ヘッダー**: アプリ名・ユーザーアバター・ログアウトボタン
+- **基準値設定**: 1チップ = [入力欄] 円/ドル（デフォルト1、任意変更可）
+- **ゲームセッション**（下記 7 章参照）
+- **当日の収益サマリー**: 本日のセッション一覧・合計損益
+- **過去のセッション履歴**: 日付・開始〜終了時刻・累計損益の一覧
+
+### 6-3. 管理者パネル（`/admin`）
+
+- `is_admin = true` のみアクセス可（それ以外は 403 リダイレクト）
+- **招待コード管理**:
+  - コード生成ボタン（生成と同時に一覧に追加）
+  - 有効期限の設定（日数入力）
+  - 一覧: コード・作成日・有効期限・使用者・使用日時・状態（未使用/使用済/期限切れ）
+- **メンバー管理**:
+  - 全メンバー一覧: 名前・メール・最終ログイン日時
+  - 各メンバーの当日収益・累計収益
+  - 日付フィルター付き収益一覧
+
+---
+
+## 7. ゲームセッション仕様
+
+### 7-1. セッションの開始・終了
+
+- マイページに「**ゲーム開始**」ボタン
+- 押すと `game_sessions` に新規レコード作成・`started_at` を記録
+- セッション中は「**ゲーム終了**」ボタンを表示
+- 終了ボタンを押すと `ended_at` を記録・`total_profit` を更新
+- 終了後はそのセッションの結果サマリーを表示
+
+### 7-2. 〇❌パーセント表示
+
+セッション開始から現時点までの全ターン（7×セット数）の集計:
+
+```
+〇: XX%（XX回）
+❌: XX%（XX回）
+```
+
+### 7-3. セッション中の表示
+
+- **入力パネル**（画面上部固定）:
+  - 〇ボタン・❌ボタン・戻すボタン
+  - 入力中のターン（1/7〜7/7）を7つのスロットでリアルタイム表示
+  - 〇/❌を押した瞬間に表のその列に即時反映
+- **bet情報バー**:
+  - 「今セットのbetチップ単位: X チップ（= Y 円）」
+  - 「累計損益: ±Z チップ（= ±W 円）」
+- **管理表**（ノート形式）:
+  - シート1: 第1〜20セット
+  - シート2: 第21〜40セット
+  - シート3: 第41〜60セット
+  - 各シートは横20列・縦12行（7ターン行 + 勝敗 + 負け越し + チップ単位 + 純利益）
+
+---
+
+## 8. 管理表レイアウト仕様（正確に実装）
+
+### 8-1. 行構成（上から順）
+
+| 行名 | 内容 |
+|------|------|
+| ヘッダー行 | セット番号（1〜20） |
+| 1ターン | 〇 or ❌ |
+| 2ターン | 〇 or ❌ |
+| 3ターン | 〇 or ❌ |
+| 4ターン | 〇 or ❌ |
+| 5ターン | 〇 or ❌ |
+| 6ターン | 〇 or ❌ |
+| 7ターン | 〇 or ❌ |
+| 勝敗 | 例: `4/3`（wins/losses） |
+| 負け越し | overshoot の値（0のときは薄く表示） |
+| チップ単位 | SEQ[next_unit_idx]（次セットのbet単位） |
+| 純利益(累計) | cumulative_profit × chip_base |
+
+### 8-2. 列数・シート数
+
+- 1シートあたり横20列
+- シートは3枚（計60セット対応）
+- 20セットを超えたら自動でシート2へ、40セット超えたらシート3へ
+
+### 8-3. 斜線表示ルール
+
+- `slashed = true` のセルは「負け越し」行・「チップ単位」行の数字にピンク横線を引く
+- CSS実装:
+
+```css
+.slashed {
+  position: relative;
+  color: rgba(255,255,255,0.2) !important;
+}
+.slashed::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: calc(100% - 4px);
+  height: 1.5px;
+  background: #e91e63;
+  transform: rotate(-10deg);
+}
+```
+
+### 8-4. 色分け
+
+| 要素 | カラーコード |
+|------|-------------|
+| 〇 | `#81c784`（緑） |
+| ❌ | `#ef9a9a`（赤） |
+| 勝ちセット背景 | `rgba(76,175,80,0.12)` |
+| 負けセット背景 | `rgba(244,67,54,0.1)` |
+| 負け越し（非ゼロ） | `#ffd54f`（黄） |
+| チップ単位 | `#90caf9`（青） |
+| 累計利益プラス | `#80cbc4`（青緑） |
+| 累計利益マイナス | `#ef9a9a`（赤） |
+| 斜線 | `#e91e63`（ピンク） |
+
+---
+
+## 9. UIデザイン仕様
+
+### 9-1. テーマ
+
+- **ダークテーマ**: 背景は深いネイビー〜ブルーのグラデーション
+
+```css
+background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+```
+
+- アクセントカラー: ゴールド `#e0c97f`
+- フォント: Google Fonts「Noto Sans JP」（weight: 300, 400, 500, 700）
+
+### 9-2. 入力ボタン
+
+```css
+/* 〇ボタン */
+background: rgba(76,175,80,0.2);
+border: 2px solid #4caf50;
+color: #81c784;
+width: 60px; height: 60px; border-radius: 12px;
+
+/* ❌ボタン */
+background: rgba(244,67,54,0.2);
+border: 2px solid #f44336;
+color: #ef9a9a;
+width: 60px; height: 60px; border-radius: 12px;
+```
+
+### 9-3. 管理表テーブル
+
+```css
+/* テーブル外枠 */
+background: rgba(255,255,255,0.04);
+border: 1px solid rgba(255,255,255,0.12);
+border-radius: 10px;
+
+/* セル */
+border: 1px solid rgba(255,255,255,0.08);
+height: 26px;
+
+/* ラベル列 */
+width: 62px;
+background: rgba(255,255,255,0.07);
+font-size: 0.62em;
+color: #aaa;
+
+/* 勝敗行の上の区切り線 */
+border-top: 1.5px solid rgba(255,255,255,0.25);
+```
+
+---
+
+## 10. 基準値（chip_base）設定
+
+- マイページに「1チップ = [数値入力] 円」の設定欄を用意
+- デフォルト値: 1
+- 設定値は `game_sessions.chip_base` に保存
+- 表示上の金額 = chip単位の値 × chip_base
+- 例: chip単位が +5、chip_base が 100 なら表示は「+500円」
+
+---
+
+## 11. 収益サマリー仕様
+
+### ユーザー（マイページ）
+
+- **当日の収益**: 本日 started_at のセッション一覧 + 合計損益（chip単位・金額両方）
+- **過去履歴**: セッションごとに日付・開始終了時刻・累計損益を一覧表示
+- **〇❌統計**: 全セッション通算の〇回数・❌回数・パーセント
+
+### 管理者（`/admin`）
+
+- 全メンバーの以下を閲覧可能:
+  - 最終ログイン日時
+  - 当日のセッション一覧と損益
+  - 累計損益（全期間）
+- 日付フィルター（カレンダーピッカー）で絞り込み可能
+
+---
+
+## 12. 環境変数（.env.local）
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+NEXT_PUBLIC_APP_URL=https://your-vercel-domain.vercel.app
+```
+
+---
+
+## 13. ディレクトリ構成
+
+```
+/
+├── app/
+│   ├── page.tsx                      # 招待コード入力画面（未ログイン時）
+│   ├── mypage/
+│   │   └── page.tsx                  # マイページ（ゲーム画面）
+│   ├── admin/
+│   │   └── page.tsx                  # 管理者パネル
+│   └── auth/
+│       └── callback/
+│           └── route.ts              # Supabase OAuthコールバック処理
+├── components/
+│   ├── GameBoard.tsx                 # 管理表（シート3枚）
+│   ├── InputPanel.tsx                # 〇❌入力パネル
+│   ├── BetBar.tsx                    # bet情報バー
+│   ├── SessionSummary.tsx            # セッション結果サマリー
+│   └── AdminPanel/
+│       ├── InviteCodeManager.tsx
+│       └── MemberList.tsx
+├── lib/
+│   ├── supabase.ts                   # Supabaseクライアント初期化
+│   ├── gameLogic.ts                  # コアゲームロジック（SEQ・全計算式）
+│   └── auth.ts                      # 招待コード検証ロジック
+├── supabase/
+│   └── migrations/
+│       └── 001_init.sql              # 全テーブル + RLSポリシー
+└── middleware.ts                     # 認証ガード（未ログインリダイレクト）
+```
+
+---
+
+## 14. セキュリティ要件
+
+- 招待コードの検証は必ずサーバーサイド（Server Action）で行う
+- `SUPABASE_SERVICE_ROLE_KEY` はサーバーサイドのみで使用し、クライアントに露出させない
+- RLS により、他ユーザーのデータへのアクセスをDB層でブロック
+- 管理者チェックは RLS ポリシーとサーバーサイド両方で実施
+
+---
+
+## 15. Claude Code への実装指示
+
+1. `supabase/migrations/001_init.sql` に全テーブル + RLS ポリシーのマイグレーションSQLを作成すること
+2. `lib/gameLogic.ts` にSEQ配列と全計算関数を集約し、フロントとサーバーで共有すること
+3. ゲームロジックの計算順序は必ず以下の通りとすること:
+   1. セット結果確定
+   2. overshoot 計算
+   3. 斜線処理（該当セットの slashed を true に更新）
+   4. next_unit_idx 決定
+   5. 損益計算（set_profit・cumulative_profit）
+   6. DB保存（sets テーブルへ INSERT、斜線対象セットを一括 UPDATE）
+4. DB保存はセット確定ごとにリアルタイムで行い、ページリロード後も途中から再開できること
+5. 斜線が引かれたセットを DB で UPDATE する際、同一セッション内の複数セットを一括 UPDATE すること（パフォーマンス考慮）
+6. `middleware.ts` で未認証ユーザーを `/` へリダイレクトし、認証済みユーザーが `/` にアクセスした場合は `/mypage` へリダイレクトすること
