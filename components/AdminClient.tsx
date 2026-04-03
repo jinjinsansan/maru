@@ -89,15 +89,15 @@ export default function AdminClient() {
   }
 
   const getCodeStatus = (code: InviteCode) => {
-    if (code.used_by) return { text: '使用済', color: 'text-gray-500' }
-    if (new Date(code.expires_at) < new Date()) return { text: '期限切れ', color: 'text-red-400' }
-    return { text: '未使用', color: 'text-green-400' }
+    if (code.used_by) return { text: 'Used', bg: 'rgba(132,142,156,0.1)', color: 'var(--text-muted)' }
+    if (new Date(code.expires_at) < new Date()) return { text: 'Expired', bg: 'rgba(239,68,68,0.08)', color: 'var(--color-x)' }
+    return { text: 'Active', bg: 'rgba(16,185,129,0.08)', color: 'var(--accent)' }
   }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-400">読み込み中...</div>
+        <div className="spinner" />
       </div>
     )
   }
@@ -105,90 +105,81 @@ export default function AdminClient() {
   if (!isAdmin) return null
 
   return (
-    <div className="min-h-screen pb-8">
+    <div className="min-h-screen min-h-dvh pb-8">
       {/* ヘッダー */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-        <h1 className="text-lg font-bold" style={{ color: 'var(--accent-gold)' }}>
-          管理者パネル
-        </h1>
+      <header className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+        <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+          Admin
+        </span>
         <div className="flex items-center gap-3">
-          <a href="/mypage" className="text-xs text-gray-400 hover:text-white transition-colors">
-            マイページ
+          <a href="/mypage" className="text-[10px] font-medium px-2 py-1 rounded transition-colors"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+            Game
           </a>
-          <button
-            onClick={handleLogout}
-            className="text-xs text-gray-500 hover:text-red-400 transition-colors"
-          >
-            ログアウト
+          <button onClick={handleLogout} className="text-[10px] transition-colors" style={{ color: 'var(--text-muted)' }}>
+            Logout
           </button>
         </div>
       </header>
 
       {/* タブ */}
-      <div className="flex border-b border-white/10">
-        <button
-          onClick={() => setTab('invite')}
-          className="flex-1 py-2 text-sm font-medium transition-colors"
-          style={{
-            color: tab === 'invite' ? 'var(--accent-gold)' : '#666',
-            borderBottom: tab === 'invite' ? '2px solid var(--accent-gold)' : '2px solid transparent',
-          }}
-        >
-          招待コード
-        </button>
-        <button
-          onClick={() => setTab('members')}
-          className="flex-1 py-2 text-sm font-medium transition-colors"
-          style={{
-            color: tab === 'members' ? 'var(--accent-gold)' : '#666',
-            borderBottom: tab === 'members' ? '2px solid var(--accent-gold)' : '2px solid transparent',
-          }}
-        >
-          メンバー
-        </button>
+      <div className="flex" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+        {(['invite', 'members'] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className="flex-1 py-2.5 text-xs font-medium tracking-wide transition-all"
+            style={{
+              color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
+              borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
+            }}
+          >
+            {t === 'invite' ? 'Invite Codes' : 'Members'}
+          </button>
+        ))}
       </div>
 
-      <div className="px-4 mt-4">
+      <div className="px-4 mt-4 max-w-2xl mx-auto fade-in">
         {/* 招待コード管理 */}
         {tab === 'invite' && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400">有効期限:</label>
-              <input
-                type="number"
-                value={expiryDays}
-                onChange={(e) => setExpiryDays(parseInt(e.target.value) || 7)}
-                min="1"
-                className="w-16 px-2 py-1 rounded bg-white/5 border border-white/20 text-white text-center text-sm focus:outline-none"
-              />
-              <span className="text-xs text-gray-400">日</span>
-              <button
-                onClick={handleCreateCode}
-                className="ml-auto px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
-                style={{
-                  background: 'linear-gradient(135deg, var(--accent-gold), #c9a84c)',
-                  color: '#1a1a2e',
-                }}
-              >
-                コード生成
+            <div className="glass-card p-4 flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Expires:</span>
+                <input
+                  type="number"
+                  value={expiryDays}
+                  onChange={(e) => setExpiryDays(parseInt(e.target.value) || 7)}
+                  min="1"
+                  className="input-field w-14 px-2 py-1 text-center text-xs font-mono"
+                />
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>days</span>
+              </div>
+              <button onClick={handleCreateCode} className="btn-primary ml-auto px-4 py-1.5 text-xs">
+                Generate
               </button>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               {codes.map(code => {
                 const status = getCodeStatus(code)
                 return (
-                  <div key={code.id} className="flex items-center justify-between rounded-md px-3 py-2 bg-white/3 border border-white/5">
-                    <div>
-                      <span className="font-mono text-sm tracking-wider" style={{ color: 'var(--accent-gold)' }}>
+                  <div key={code.id} className="glass-card flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-sm font-semibold tracking-widest" style={{ color: 'var(--text-primary)' }}>
                         {code.code}
                       </span>
-                      <span className={`ml-2 text-xs ${status.color}`}>{status.text}</span>
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                        style={{ background: status.bg, color: status.color }}>
+                        {status.text}
+                      </span>
                     </div>
-                    <div className="text-right text-xs text-gray-500">
-                      <div>期限: {new Date(code.expires_at).toLocaleDateString('ja-JP')}</div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                        {new Date(code.expires_at).toLocaleDateString('ja-JP')}
+                      </div>
                       {code.used_user && (
-                        <div className="text-gray-400">
+                        <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
                           {code.used_user.display_name || code.used_user.email}
                         </div>
                       )}
@@ -196,31 +187,47 @@ export default function AdminClient() {
                   </div>
                 )
               })}
+              {codes.length === 0 && (
+                <div className="text-center py-8 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  No invite codes yet
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* メンバー管理 */}
         {tab === 'members' && (
-          <div className="space-y-4">
-            {/* メンバー一覧 */}
+          <div className="space-y-5">
             <div>
-              <h3 className="text-xs text-gray-400 mb-2">メンバー一覧 ({members.length}名)</h3>
-              <div className="space-y-1">
+              <h3 className="text-[10px] font-medium tracking-wider uppercase mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
+                Members ({members.length})
+              </h3>
+              <div className="space-y-1.5">
                 {members.map(member => (
-                  <div key={member.id} className="flex items-center justify-between rounded-md px-3 py-2 bg-white/3 border border-white/5">
-                    <div className="flex items-center gap-2">
-                      {member.avatar_url && (
-                        <img src={member.avatar_url} alt="" className="w-6 h-6 rounded-full" />
-                      )}
+                  <div key={member.id} className="glass-card flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold"
+                        style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                        {(member.display_name || member.email)[0].toUpperCase()}
+                      </div>
                       <div>
-                        <div className="text-sm">{member.display_name || member.email}</div>
-                        <div className="text-xs text-gray-500">{member.email}</div>
+                        <div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                          {member.display_name || member.email}
+                        </div>
+                        <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{member.email}</div>
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {member.is_admin && <span className="text-yellow-500 mr-1">管理者</span>}
-                      最終: {new Date(member.last_login_at).toLocaleDateString('ja-JP')}
+                    <div className="text-right">
+                      {member.is_admin && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                          style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--accent)' }}>
+                          Admin
+                        </span>
+                      )}
+                      <div className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {new Date(member.last_login_at).toLocaleDateString('ja-JP')}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -228,62 +235,61 @@ export default function AdminClient() {
             </div>
 
             {/* 日付フィルター */}
-            <div className="flex items-center gap-2">
+            <div className="glass-card p-3 flex items-center gap-2">
               <input
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="px-2 py-1 rounded bg-white/5 border border-white/20 text-white text-sm focus:outline-none"
+                className="input-field px-2 py-1 text-xs"
               />
-              <button
-                onClick={handleDateFilter}
-                className="px-3 py-1 rounded text-xs bg-white/10 text-gray-300 hover:bg-white/20 transition-colors"
-              >
-                絞り込み
+              <button onClick={handleDateFilter} className="btn-primary px-3 py-1 text-[10px]">
+                Filter
               </button>
               {dateFilter && (
                 <button
                   onClick={() => { setDateFilter(''); getMemberSessions().then(r => { if (r.sessions) setSessions(r.sessions) }) }}
-                  className="px-2 py-1 rounded text-xs text-gray-500 hover:text-white transition-colors"
+                  className="text-[10px] transition-colors" style={{ color: 'var(--text-muted)' }}
                 >
-                  リセット
+                  Reset
                 </button>
               )}
             </div>
 
             {/* セッション一覧 */}
             <div>
-              <h3 className="text-xs text-gray-400 mb-2">セッション一覧</h3>
-              <div className="space-y-1">
+              <h3 className="text-[10px] font-medium tracking-wider uppercase mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
+                Sessions
+              </h3>
+              <div className="space-y-1.5">
                 {sessions.map(session => {
                   const profit = session.total_profit * session.chip_base
                   return (
-                    <div key={session.id} className="flex items-center justify-between rounded-md px-3 py-2 bg-white/3 border border-white/5 text-xs">
+                    <div key={session.id} className="glass-card flex items-center justify-between px-4 py-2.5">
                       <div>
-                        <span className="text-gray-300">
+                        <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
                           {session.user?.display_name || session.user?.email}
                         </span>
-                        <span className="text-gray-500 ml-2">
-                          {new Date(session.started_at).toLocaleDateString('ja-JP')}{' '}
+                        <div className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                          {new Date(session.started_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}{' '}
                           {new Date(session.started_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                          {' ~ '}
+                          {' - '}
                           {new Date(session.ended_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                        </div>
                       </div>
                       <span
-                        className="font-bold"
+                        className="font-mono font-semibold text-sm"
                         style={{
                           color: profit >= 0 ? 'var(--color-profit-plus)' : 'var(--color-profit-minus)',
                         }}
                       >
-                        {profit >= 0 ? '+' : ''}{profit.toLocaleString()}円
+                        {profit >= 0 ? '+' : ''}{profit.toLocaleString()}
                       </span>
                     </div>
                   )
                 })}
                 {sessions.length === 0 && (
-                  <div className="text-center text-gray-500 text-sm py-4">
-                    セッションがありません
+                  <div className="text-center py-8 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    No sessions found
                   </div>
                 )}
               </div>

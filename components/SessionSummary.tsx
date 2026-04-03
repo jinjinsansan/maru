@@ -10,44 +10,53 @@ interface SessionSummaryProps {
     o_count: number
     x_count: number
   }[]
-  chipBase?: number
 }
 
 export default function SessionSummary({ sessions }: SessionSummaryProps) {
   if (sessions.length === 0) {
     return (
-      <div className="text-center text-gray-500 text-sm py-4">
-        まだセッションがありません
+      <div className="glass-card p-6 text-center">
+        <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          まだセッションがありません
+        </div>
       </div>
     )
   }
 
-  // 当日セッションのフィルタ
   const today = new Date().toISOString().split('T')[0]
   const todaySessions = sessions.filter(s => s.started_at.startsWith(today))
   const todayProfit = todaySessions.reduce((sum, s) => sum + s.total_profit * s.chip_base, 0)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 fade-in">
       {/* 当日サマリー */}
       {todaySessions.length > 0 && (
-        <div className="rounded-lg p-3 bg-white/5 border border-white/10">
-          <h3 className="text-xs text-gray-400 mb-2">本日の収益</h3>
+        <div className="glass-card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-medium tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
+              Today
+            </span>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {todaySessions.length} sessions
+            </span>
+          </div>
           <div
-            className="text-2xl font-bold"
+            className="text-2xl font-semibold font-mono tracking-tight"
             style={{
               color: todayProfit >= 0 ? 'var(--color-profit-plus)' : 'var(--color-profit-minus)',
             }}
           >
-            {todayProfit >= 0 ? '+' : ''}{todayProfit.toLocaleString()}円
+            {todayProfit >= 0 ? '+' : ''}{todayProfit.toLocaleString()}
+            <span className="text-sm font-normal ml-0.5" style={{ color: 'var(--text-muted)' }}>円</span>
           </div>
-          <div className="text-xs text-gray-500 mt-1">{todaySessions.length}セッション</div>
         </div>
       )}
 
       {/* 過去セッション一覧 */}
       <div>
-        <h3 className="text-xs text-gray-400 mb-2">セッション履歴</h3>
+        <h3 className="text-[10px] font-medium tracking-wider uppercase mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
+          History
+        </h3>
         <div className="space-y-1">
           {sessions.map(session => {
             const start = new Date(session.started_at)
@@ -57,25 +66,29 @@ export default function SessionSummary({ sessions }: SessionSummaryProps) {
             const oPercent = total > 0 ? Math.round((session.o_count / total) * 100) : 0
 
             return (
-              <div key={session.id} className="flex items-center justify-between rounded-md px-3 py-2 bg-white/3 text-xs">
+              <div key={session.id} className="glass-card flex items-center justify-between px-3 py-2.5">
                 <div>
-                  <span className="text-gray-400">
-                    {start.toLocaleDateString('ja-JP')} {start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                    {end && ` ~ ${end.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`}
-                  </span>
+                  <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {start.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}{' '}
+                    <span className="font-mono">{start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
+                    {end && (
+                      <span className="font-mono"> - {end.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
+                    )}
+                  </div>
                   {total > 0 && (
-                    <span className="text-gray-600 ml-2">
-                      〇{oPercent}% ({session.o_count}/{total})
-                    </span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] font-mono" style={{ color: 'var(--color-o)' }}>〇{oPercent}%</span>
+                      <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{session.o_count}/{total}</span>
+                    </div>
                   )}
                 </div>
                 <span
-                  className="font-bold"
+                  className="font-mono font-semibold text-sm"
                   style={{
                     color: profit >= 0 ? 'var(--color-profit-plus)' : 'var(--color-profit-minus)',
                   }}
                 >
-                  {profit >= 0 ? '+' : ''}{profit.toLocaleString()}円
+                  {profit >= 0 ? '+' : ''}{profit.toLocaleString()}
                 </span>
               </div>
             )

@@ -45,7 +45,6 @@ export default function MyPageClient() {
   const [history, setHistory] = useState<GameSession[]>([])
   const [loading, setLoading] = useState(true)
 
-  // 計算済みの値
   const currentUnitIdx = sets.length > 0 ? sets[sets.length - 1].next_unit_idx : 0
   const cumulativeProfit = sets.length > 0 ? sets[sets.length - 1].cumulative_profit : 0
   const prevOvershoot = sets.length > 0 ? sets[sets.length - 1].overshoot : 0
@@ -95,7 +94,6 @@ export default function MyPageClient() {
     const base = parseFloat(chipBaseInput) || 1
     setChipBase(base)
     const result = await startSession(base)
-    console.log('startSession result:', result)
     if (result.error) {
       alert('エラー: ' + result.error)
       return
@@ -122,42 +120,25 @@ export default function MyPageClient() {
     const newTurns = [...currentTurns, value]
     setCurrentTurns(newTurns)
 
-    // 7ターン完了 → セット確定
     if (newTurns.length === 7) {
       const results = newTurns.join('')
       const setCopy = sets.map(s => ({ ...s }))
 
       const { newSet, slashedIds } = finalizeSet(
-        results,
-        setCopy,
-        session.id,
-        currentUnitIdx,
-        cumulativeProfit,
-        prevOvershoot,
+        results, setCopy, session.id, currentUnitIdx, cumulativeProfit, prevOvershoot,
       )
 
-      // DB保存
       const [saveResult] = await Promise.all([
         saveSet(newSet),
         updateSlashedSets(slashedIds),
-        updateSessionCounts(
-          session.id,
-          totalO + newSet.wins,
-          totalX + newSet.losses,
-        ),
+        updateSessionCounts(session.id, totalO + newSet.wins, totalX + newSet.losses),
       ])
 
-      if (saveResult.set) {
-        newSet.id = saveResult.set.id
-      }
+      if (saveResult.set) newSet.id = saveResult.set.id
 
-      // 斜線反映
-      const updatedSets = setCopy.map(s => {
-        if (slashedIds.includes(s.id!)) {
-          return { ...s, slashed: true }
-        }
-        return s
-      })
+      const updatedSets = setCopy.map(s =>
+        slashedIds.includes(s.id!) ? { ...s, slashed: true } : s
+      )
 
       setSets([...updatedSets, newSet])
       setCurrentTurns([])
@@ -165,9 +146,7 @@ export default function MyPageClient() {
   }
 
   const handleUndo = () => {
-    if (currentTurns.length > 0) {
-      setCurrentTurns(prev => prev.slice(0, -1))
-    }
+    if (currentTurns.length > 0) setCurrentTurns(prev => prev.slice(0, -1))
   }
 
   const handleLogout = async () => {
@@ -179,65 +158,55 @@ export default function MyPageClient() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-400">読み込み中...</div>
+        <div className="spinner" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen pb-8">
+    <div className="min-h-screen min-h-dvh pb-8">
       {/* ヘッダー */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-        <h1 className="text-lg font-bold" style={{ color: 'var(--accent-gold)' }}>
-          〇❌パーティ
-        </h1>
+      <header className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            〇❌
+          </span>
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+            {user?.display_name || 'Guest'}
+          </span>
+        </div>
         <div className="flex items-center gap-3">
           {user?.is_admin && (
-            <a href="/admin" className="text-xs text-gray-400 hover:text-white transition-colors">
-              管理者
+            <a href="/admin" className="text-[10px] font-medium px-2 py-1 rounded transition-colors"
+              style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--accent)' }}>
+              Admin
             </a>
           )}
-          <div className="flex items-center gap-2">
-            {user?.avatar_url && (
-              <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full" />
-            )}
-            <span className="text-sm text-gray-300">{user?.display_name || user?.email}</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs text-gray-500 hover:text-red-400 transition-colors"
-          >
-            ログアウト
+          <button onClick={handleLogout} className="text-[10px] transition-colors" style={{ color: 'var(--text-muted)' }}>
+            Logout
           </button>
         </div>
       </header>
 
       {/* セッション未開始 */}
       {!session && (
-        <div className="px-4 mt-6 space-y-6">
-          <div className="rounded-lg p-4 bg-white/5 border border-white/10">
-            <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--accent-gold)' }}>
-              ゲーム設定
+        <div className="px-4 mt-6 max-w-lg mx-auto space-y-5 fade-in">
+          <div className="glass-card p-5">
+            <h2 className="text-[10px] font-medium tracking-wider uppercase mb-4" style={{ color: 'var(--text-muted)' }}>
+              Game Settings
             </h2>
-            <div className="flex items-center gap-2 mb-4">
-              <label className="text-xs text-gray-400">1チップ =</label>
+            <div className="flex items-center gap-2 mb-5">
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>1 chip =</span>
               <input
                 type="number"
                 value={chipBaseInput}
                 onChange={(e) => setChipBaseInput(e.target.value)}
                 min="1"
-                className="w-20 px-2 py-1 rounded bg-white/5 border border-white/20 text-white text-center text-sm focus:outline-none focus:border-[var(--accent-gold)]"
+                className="input-field w-20 px-2 py-1.5 text-center text-sm font-mono"
               />
-              <span className="text-xs text-gray-400">円</span>
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>円</span>
             </div>
-            <button
-              onClick={handleStartSession}
-              className="w-full py-3 rounded-lg font-bold text-lg transition-all active:scale-[0.98]"
-              style={{
-                background: 'linear-gradient(135deg, var(--accent-gold), #c9a84c)',
-                color: '#1a1a2e',
-              }}
-            >
+            <button onClick={handleStartSession} className="btn-primary w-full py-3 text-sm">
               ゲーム開始
             </button>
           </div>
@@ -260,17 +229,24 @@ export default function MyPageClient() {
 
           {/* 〇❌パーセント表示 */}
           {totalTurns > 0 && (
-            <div className="flex justify-center gap-6 py-2 text-xs">
-              <span style={{ color: 'var(--color-o)' }}>
-                〇 {Math.round((totalO / totalTurns) * 100)}% ({totalO}回)
-              </span>
-              <span style={{ color: 'var(--color-x)' }}>
-                ❌ {Math.round((totalX / totalTurns) * 100)}% ({totalX}回)
-              </span>
+            <div className="flex justify-center gap-4 py-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-o)' }} />
+                <span className="text-[10px] font-mono font-medium" style={{ color: 'var(--color-o)' }}>
+                  {Math.round((totalO / totalTurns) * 100)}%
+                </span>
+                <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>({totalO})</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-x)' }} />
+                <span className="text-[10px] font-mono font-medium" style={{ color: 'var(--color-x)' }}>
+                  {Math.round((totalX / totalTurns) * 100)}%
+                </span>
+                <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>({totalX})</span>
+              </div>
             </div>
           )}
 
-          {/* 管理表 */}
           <div className="mt-2">
             <GameBoard
               sets={sets}
@@ -280,11 +256,15 @@ export default function MyPageClient() {
             />
           </div>
 
-          {/* ゲーム終了ボタン */}
-          <div className="px-4 mt-6">
+          <div className="px-4 mt-6 max-w-lg mx-auto">
             <button
               onClick={handleEndSession}
-              className="w-full py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30 transition-colors"
+              className="w-full py-2.5 rounded-lg text-xs font-medium transition-all"
+              style={{
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.2)',
+                color: 'var(--color-x)',
+              }}
             >
               ゲーム終了
             </button>

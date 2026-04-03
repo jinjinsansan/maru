@@ -1,37 +1,58 @@
 @import "tailwindcss";
 
 :root {
-  --background: #1a1a2e;
-  --foreground: #e0e0e0;
-  --accent-gold: #e0c97f;
-  --color-o: #81c784;
-  --color-x: #ef9a9a;
-  --color-win-bg: rgba(76,175,80,0.12);
-  --color-lose-bg: rgba(244,67,54,0.1);
-  --color-overshoot: #ffd54f;
-  --color-chip-unit: #90caf9;
-  --color-profit-plus: #80cbc4;
-  --color-profit-minus: #ef9a9a;
-  --color-slash: #e91e63;
+  --bg-primary: #181A20;
+  --bg-secondary: #1E2028;
+  --bg-card: #22242C;
+  --bg-elevated: #2A2D37;
+  --border-primary: #2B3139;
+  --border-subtle: #23262F;
+  --text-primary: #EAECEF;
+  --text-secondary: #848E9C;
+  --text-muted: #5E6673;
+  --accent: #10B981;
+  --accent-hover: #0D9668;
+  --color-o: #10B981;
+  --color-x: #EF4444;
+  --color-win-bg: rgba(16,185,129,0.08);
+  --color-lose-bg: rgba(239,68,68,0.06);
+  --color-overshoot: #F59E0B;
+  --color-chip-unit: #6366F1;
+  --color-profit-plus: #10B981;
+  --color-profit-minus: #EF4444;
+  --color-slash: #EC4899;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-noto-sans-jp);
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-inter), var(--font-noto-sans-jp);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  color: var(--foreground);
-  font-family: var(--font-noto-sans-jp), 'Noto Sans JP', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-inter), var(--font-noto-sans-jp), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
+  letter-spacing: -0.01em;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 4px; }
 
 /* 斜線スタイル */
 .slashed {
   position: relative;
-  color: rgba(255,255,255,0.2) !important;
+  color: var(--text-muted) !important;
+  opacity: 0.4;
 }
 .slashed::after {
   content: '';
@@ -40,34 +61,104 @@ body {
   top: 50%;
   width: calc(100% - 4px);
   height: 1.5px;
-  background: #e91e63;
-  transform: rotate(-10deg);
+  background: var(--color-slash);
+  transform: rotate(-8deg);
+  border-radius: 1px;
 }
 
 /* 管理表テーブル */
 .game-table {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
   overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .game-table td,
 .game-table th {
-  border: 1px solid rgba(255,255,255,0.08);
-  height: 26px;
+  border: 1px solid var(--border-subtle);
+  height: 28px;
   text-align: center;
-  font-size: 0.75rem;
-  padding: 2px 4px;
+  font-size: 0.7rem;
+  padding: 2px 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .game-table .label-cell {
-  width: 62px;
-  background: rgba(255,255,255,0.07);
-  font-size: 0.62em;
-  color: #aaa;
+  width: 52px;
+  background: var(--bg-elevated);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .game-table .separator-row td {
-  border-top: 1.5px solid rgba(255,255,255,0.25);
+  border-top: 1.5px solid var(--border-primary);
+}
+
+/* Glass card */
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+}
+
+/* Input */
+.input-field {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.input-field::placeholder {
+  color: var(--text-muted);
+}
+
+/* Button */
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-primary);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
 }

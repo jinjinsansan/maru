@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SEQ, type SetData } from '@/lib/gameLogic'
 
 interface GameBoardProps {
@@ -14,44 +14,49 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
   const [activeSheet, setActiveSheet] = useState(0)
 
   const sheetStart = activeSheet * 20
-  const sheetEnd = sheetStart + 20
 
-  // 現在のシートを自動選択
-  const autoSheet = Math.floor((currentSetIndex - 1) / 20)
-  if (autoSheet !== activeSheet && autoSheet >= 0 && autoSheet <= 2) {
-    // シート自動切り替えはレンダリング外で
-  }
+  // 自動シート切り替え
+  useEffect(() => {
+    const autoSheet = Math.floor((currentSetIndex - 1) / 20)
+    if (autoSheet >= 0 && autoSheet <= 2) setActiveSheet(autoSheet)
+  }, [currentSetIndex])
 
   return (
-    <div className="px-2">
+    <div className="px-2 sm:px-4">
       {/* シートタブ */}
-      <div className="flex gap-1 mb-2">
+      <div className="flex gap-0.5 mb-2">
         {[0, 1, 2].map(sheet => (
           <button
             key={sheet}
             onClick={() => setActiveSheet(sheet)}
-            className="px-3 py-1 text-xs rounded-t-md transition-colors"
+            className="px-3 py-1.5 text-[10px] font-medium tracking-wide rounded-t-lg transition-all"
             style={{
-              background: activeSheet === sheet ? 'rgba(255,255,255,0.1)' : 'transparent',
-              color: activeSheet === sheet ? 'var(--accent-gold)' : '#666',
-              borderBottom: activeSheet === sheet ? '2px solid var(--accent-gold)' : '2px solid transparent',
+              background: activeSheet === sheet ? 'var(--bg-card)' : 'transparent',
+              color: activeSheet === sheet ? 'var(--text-primary)' : 'var(--text-muted)',
+              borderBottom: activeSheet === sheet ? '2px solid var(--accent)' : '2px solid transparent',
             }}
           >
-            {sheet * 20 + 1}〜{(sheet + 1) * 20}
+            {sheet * 20 + 1} - {(sheet + 1) * 20}
           </button>
         ))}
       </div>
 
       {/* テーブル */}
-      <div className="overflow-x-auto">
-        <table className="game-table w-full" style={{ minWidth: '700px' }}>
+      <div className="overflow-x-auto -mx-2 px-2 pb-2">
+        <table className="game-table w-full" style={{ minWidth: '640px' }}>
           <thead>
             <tr>
               <th className="label-cell"></th>
               {Array.from({ length: 20 }).map((_, i) => {
                 const setNum = sheetStart + i + 1
+                const isCurrent = setNum === currentSetIndex
                 return (
-                  <th key={i} className="text-xs text-gray-500 px-1" style={{ minWidth: '32px' }}>
+                  <th key={i} className="font-mono" style={{
+                    minWidth: '28px',
+                    fontSize: '0.6rem',
+                    color: isCurrent ? 'var(--accent)' : 'var(--text-muted)',
+                    fontWeight: isCurrent ? 600 : 400,
+                  }}>
                     {setNum}
                   </th>
                 )
@@ -72,10 +77,10 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
                   let color = ''
 
                   if (setData) {
-                    value = setData.results[turnIdx] === 'O' ? '〇' : '❌'
+                    value = setData.results[turnIdx] === 'O' ? '〇' : '✕'
                     color = setData.results[turnIdx] === 'O' ? 'var(--color-o)' : 'var(--color-x)'
                   } else if (isCurrentSet && currentTurns[turnIdx]) {
-                    value = currentTurns[turnIdx] === 'O' ? '〇' : '❌'
+                    value = currentTurns[turnIdx] === 'O' ? '〇' : '✕'
                     color = currentTurns[turnIdx] === 'O' ? 'var(--color-o)' : 'var(--color-x)'
                   }
 
@@ -84,9 +89,9 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
                       key={colIdx}
                       style={{
                         color,
-                        background: isCurrentSet ? 'rgba(224,201,127,0.08)' : undefined,
+                        background: isCurrentSet ? 'rgba(16,185,129,0.04)' : undefined,
+                        fontWeight: value ? 500 : 400,
                       }}
-                      className="text-xs"
                     >
                       {value}
                     </td>
@@ -97,7 +102,7 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
 
             {/* 勝敗行 */}
             <tr className="separator-row">
-              <td className="label-cell">勝敗</td>
+              <td className="label-cell">W/L</td>
               {Array.from({ length: 20 }).map((_, colIdx) => {
                 const setIdx = sheetStart + colIdx
                 const setData = sets[setIdx]
@@ -107,11 +112,11 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
                 return (
                   <td
                     key={colIdx}
+                    className="font-mono font-medium"
                     style={{
                       background: isWin ? 'var(--color-win-bg)' : 'var(--color-lose-bg)',
                       color: isWin ? 'var(--color-o)' : 'var(--color-x)',
                     }}
-                    className="text-xs font-medium"
                   >
                     {setData.wins}/{setData.losses}
                   </td>
@@ -121,7 +126,7 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
 
             {/* 負け越し行 */}
             <tr>
-              <td className="label-cell">負越し</td>
+              <td className="label-cell">OS</td>
               {Array.from({ length: 20 }).map((_, colIdx) => {
                 const setIdx = sheetStart + colIdx
                 const setData = sets[setIdx]
@@ -130,9 +135,10 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
                 return (
                   <td
                     key={colIdx}
-                    className={`text-xs ${setData.slashed ? 'slashed' : ''}`}
+                    className={`font-mono ${setData.slashed ? 'slashed' : ''}`}
                     style={{
-                      color: setData.overshoot > 0 ? 'var(--color-overshoot)' : 'rgba(255,255,255,0.2)',
+                      color: setData.overshoot > 0 ? 'var(--color-overshoot)' : 'var(--text-muted)',
+                      opacity: setData.overshoot === 0 && !setData.slashed ? 0.3 : undefined,
                     }}
                   >
                     {setData.overshoot}
@@ -143,7 +149,7 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
 
             {/* チップ単位行 */}
             <tr>
-              <td className="label-cell">単位</td>
+              <td className="label-cell">UNIT</td>
               {Array.from({ length: 20 }).map((_, colIdx) => {
                 const setIdx = sheetStart + colIdx
                 const setData = sets[setIdx]
@@ -152,7 +158,7 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
                 return (
                   <td
                     key={colIdx}
-                    className={`text-xs ${setData.slashed ? 'slashed' : ''}`}
+                    className={`font-mono font-medium ${setData.slashed ? 'slashed' : ''}`}
                     style={{ color: 'var(--color-chip-unit)' }}
                   >
                     {SEQ[setData.next_unit_idx]}
@@ -163,7 +169,7 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
 
             {/* 純利益(累計)行 */}
             <tr>
-              <td className="label-cell">累計</td>
+              <td className="label-cell">P/L</td>
               {Array.from({ length: 20 }).map((_, colIdx) => {
                 const setIdx = sheetStart + colIdx
                 const setData = sets[setIdx]
@@ -173,7 +179,7 @@ export default function GameBoard({ sets, chipBase, currentTurns, currentSetInde
                 return (
                   <td
                     key={colIdx}
-                    className="text-xs font-medium"
+                    className="font-mono font-semibold"
                     style={{
                       color: setData.cumulative_profit >= 0 ? 'var(--color-profit-plus)' : 'var(--color-profit-minus)',
                     }}
