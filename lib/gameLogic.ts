@@ -71,33 +71,43 @@ export function calcNextUnitIdx(
   newOvershoot: number
 ): number {
   if (diff < 0) {
-    // 負け → 1段階UP
     return Math.min(usedUnitIdx + 1, SEQ.length - 1)
   }
 
-  // 勝ち → 非斜線セットから overshoot が一致するものを後ろから検索
+  // 優先①: 同じovershootの非斜線セットを後ろから探す
   let found = -1
-  for (let i = sets.length - 1; i >= 0; i--) {
-    if (!sets[i].slashed && sets[i].overshoot === newOvershoot) {
-      found = sets[i].next_unit_idx
+  for (let fi = sets.length - 1; fi >= 0; fi--) {
+    if (!sets[fi].slashed && sets[fi].overshoot === newOvershoot) {
+      found = sets[fi].next_unit_idx
       break
     }
   }
   if (found >= 0) return found
 
-  // 一致なし → 非斜線セットの中で overshoot が newOvershoot より大きく最も近いもの
-  let best = -1
-  let bestDiff = Infinity
-  for (let i = 0; i < sets.length; i++) {
-    if (!sets[i].slashed && sets[i].overshoot > newOvershoot) {
-      const d = sets[i].overshoot - newOvershoot
-      if (d < bestDiff) {
-        bestDiff = d
-        best = sets[i].next_unit_idx
+  // 優先②③: 非斜線セットからovershootが近いものを探す
+  let bestAboveIdx = -1, bestAboveDiff = Infinity
+  let bestBelowIdx = -1, bestBelowDiff = Infinity
+
+  for (let fk = 0; fk < sets.length; fk++) {
+    if (!sets[fk].slashed) {
+      const dd = sets[fk].overshoot - newOvershoot
+      if (dd > 0 && dd < bestAboveDiff) {
+        bestAboveDiff = dd
+        bestAboveIdx = sets[fk].next_unit_idx
+      }
+      if (dd < 0 && (-dd) < bestBelowDiff) {
+        bestBelowDiff = -dd
+        bestBelowIdx = sets[fk].next_unit_idx
       }
     }
   }
-  return best >= 0 ? best : 0
+
+  // 優先②: 大きい方で最も近い → そのnext_unit_idx
+  if (bestAboveIdx >= 0) return bestAboveIdx
+  // 優先③: 大きい方がない → 小さい方で最も近いのnext_unit_idx + 1
+  if (bestBelowIdx >= 0) return Math.min(bestBelowIdx + 1, SEQ.length - 1)
+
+  return 0
 }
 
 /**
